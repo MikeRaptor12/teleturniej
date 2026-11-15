@@ -1,6 +1,7 @@
 // Etap 1 – Szybki strzał. Czysta logika, bez WebSocketów: łatwo ją testować.
 import type { QuizView } from "../../shared/protocol";
 import { QUIZ_QUESTIONS } from "../content/quiz";
+import { shuffle } from "./util";
 
 export const QUIZ = {
   questions: 10,
@@ -25,15 +26,6 @@ export interface QuizState {
 interface ScoredPlayer {
   id: string;
   score: number;
-}
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }
 
 export function quizStart(now: number): QuizState {

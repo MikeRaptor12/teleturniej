@@ -15,7 +15,7 @@ Gra w stylu teleturnieju dla znajomych, tylko na komputer (desktop), online. Ję
 
 ## Plan etapów
 1. Szybki strzał – ABCD, bonus za szybkość ✅
-2. Zgadnij film – stopniowo odsłaniane podpowiedzi (emoji, fakty, fabuła „na opak”), wpisywanie tytułu z tolerancją literówek, mniej punktów za późniejsze trafienie
+2. Zgadnij film – stopniowo odsłaniane podpowiedzi (emoji, fakty, fabuła „na opak”), wpisywanie tytułu z tolerancją literówek, mniej punktów za późniejsze trafienie ✅
 3. Kłamczuch – gracze wpisują fałszywe odpowiedzi, potem głosują na prawdziwą
 4. Gdzie to jest? (pinezka na mapie OSM/Leaflet) / Bliżej = lepiej (pytania liczbowe)
 5. Wielki Finał – tablica 5 kategorii × 4 pola, pole wybiera ostatni w rankingu, każdy tajnie obstawia punkty (max = wartość pola), ostatnie pole „Va banque”

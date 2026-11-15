@@ -17,6 +17,7 @@ import {
   quizView,
   type QuizState,
 } from "./stages/quiz";
+import { filmAdvance, filmEveryoneDone, filmGuess, filmStart, filmView, type FilmState } from "./stages/film";
 
 interface StoredPlayer {
   id: string;
@@ -25,7 +26,7 @@ interface StoredPlayer {
   joinedAt: number;
 }
 
-type RoundState = QuizState | { kind: "placeholder" };
+type RoundState = QuizState | FilmState | { kind: "placeholder" };
 
 interface Stored {
   code: string;
@@ -138,6 +139,19 @@ export class GameRoom extends DurableObject<Env> {
         return this.broadcast();
       }
 
+      case "guess": {
+        const round = room.round;
+        if (!att.playerId || room.phase !== "playing" || round?.kind !== "film") return;
+        const player = room.players.find((p) => p.id === att.playerId);
+        if (!filmGuess(round, player, msg.text, now)) return;
+        // wszyscy trafili albo wyczerpali próby -> od razu odsłonięcie
+        if (filmEveryoneDone(round, this.connectedPlayerIds())) {
+          filmAdvance(round, now, true);
+        }
+        await this.persistAndSchedule();
+        return this.broadcast();
+      }
+
       case "next": {
         if (!isHost) return;
         if (room.phase === "finished") {
@@ -177,14 +191,16 @@ export class GameRoom extends DurableObject<Env> {
   async alarm() {
     const room = await this.load();
     const round = room.round;
-    if (room.phase !== "playing" || round?.kind !== "quiz" || round.endsAt === null) return;
+    const endsAt = roundEndsAt(round);
+    if (room.phase !== "playing" || !round || endsAt === null) return;
     const now = Date.now();
-    if (now + 50 < round.endsAt) {
+    if (now + 50 < endsAt) {
       // alarm przyszedł za wcześnie – przestaw
-      await this.ctx.storage.setAlarm(round.endsAt);
+      await this.ctx.storage.setAlarm(endsAt);
       return;
     }
-    quizAdvance(round, room.players, now);
+    if (round.kind === "quiz") quizAdvance(round, room.players, now);
+    else if (round.kind === "film") filmAdvance(round, now);
     await this.persistAndSchedule();
     this.broadcast();
   }
@@ -216,8 +232,11 @@ export class GameRoom extends DurableObject<Env> {
       case 1:
         room.round = quizStart(now);
         break;
+      case 2:
+        room.round = filmStart(now);
+        break;
       default:
-        room.round = { kind: "placeholder" }; // etapy 2–5: wkrótce
+        room.round = { kind: "placeholder" }; // etapy 3–5: wkrótce
     }
   }
 
@@ -229,10 +248,10 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async persistAndSchedule() {
-    const round = this.data?.round;
+    const endsAt = roundEndsAt(this.data?.round ?? null);
     await this.save();
-    if (this.data?.phase === "playing" && round?.kind === "quiz" && round.endsAt !== null) {
-      await this.ctx.storage.setAlarm(round.endsAt);
+    if (this.data?.phase === "playing" && endsAt !== null) {
+      await this.ctx.storage.setAlarm(endsAt);
     } else {
       await this.ctx.storage.deleteAlarm();
     }
@@ -260,6 +279,7 @@ export class GameRoom extends DurableObject<Env> {
     const round = this.data!.round;
     if (!round) return null;
     if (round.kind === "quiz") return quizView(round);
+    if (round.kind === "film") return filmView(round);
     return round;
   }
 
@@ -297,4 +317,10 @@ export class GameRoom extends DurableObject<Env> {
       if (s !== except) this.send(s, msg);
     }
   }
+}
+
+/** Kiedy kończy się bieżący krok etapu (null = czekamy na hosta). */
+function roundEndsAt(round: RoundState | null): number | null {
+  if (!round || round.kind === "placeholder") return null;
+  return round.endsAt;
 }

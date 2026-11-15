@@ -106,3 +106,21 @@ button.link { background: none; color: var(--danger); padding: 0 0 0 12px; font-
 .who li { padding: 6px 12px; border-radius: 999px; background: #0f1230; }
 .who li.ok { color: #7dffb0; }
 .who li.bad { color: var(--muted); }
+
+/* --- etap 2: Zgadnij film --- */
+.accent { color: var(--accent); }
+.hints { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; margin: 8px 0 20px; }
+.hint {
+  display: flex; gap: 14px; align-items: baseline;
+  background: #0f1230; padding: 14px 16px; border-radius: 10px;
+  font-size: 1.1rem; animation: hint-in 0.4s ease-out;
+}
+.hint.emoji span:last-child { font-size: 2.2rem; letter-spacing: 0.2em; }
+.hint-label {
+  flex: 0 0 120px; color: var(--muted); font-size: 0.8rem;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+@keyframes hint-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.guess input { font-size: 1.15rem; padding: 14px; }
+.guess button { padding: 14px 22px; }
+.big-ok { font-size: 1.3rem; color: #7dffb0; }

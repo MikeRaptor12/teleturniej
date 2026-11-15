@@ -32,12 +32,36 @@ export interface QuizView {
   results: Record<string, { choice: number | null; points: number }> | null;
 }
 
+/** Widok etapu 2 – Zgadnij film. */
+export interface FilmView {
+  kind: "film";
+  step: "intro" | "hints" | "reveal" | "summary";
+  /** numer filmu od 0 */
+  index: number;
+  total: number;
+  /** czas serwera (ms), kiedy kończy się bieżący krok (następna podpowiedź / odsłona) */
+  endsAt: number | null;
+  durationMs: number | null;
+  /** dotychczas odsłonięte podpowiedzi */
+  hints: string[];
+  hintCount: number;
+  /** ile punktów daje trafienie teraz (tylko w kroku "hints") */
+  pointsNow: number | null;
+  /** id gracza -> zdobyte punkty (kto już trafił) */
+  solved: Record<string, number>;
+  /** id gracza -> liczba wykorzystanych prób */
+  attempts: Record<string, number>;
+  maxAttempts: number;
+  /** tytuł – tylko w kroku "reveal" */
+  title: string | null;
+}
+
 /** Etap jeszcze niezaimplementowany. */
 export interface PlaceholderView {
   kind: "placeholder";
 }
 
-export type RoundView = QuizView | PlaceholderView;
+export type RoundView = QuizView | FilmView | PlaceholderView;
 
 export interface RoomState {
   code: string;
@@ -56,6 +80,8 @@ export type ClientMessage =
   | { type: "start" }
   | { type: "kick"; playerId: string }
   | { type: "answer"; choice: number }
+  /** etap 2: próba odgadnięcia tytułu */
+  | { type: "guess"; text: string }
   /** host: przejście dalej (po podsumowaniu etapu / na końcu gry) */
   | { type: "next" };
 

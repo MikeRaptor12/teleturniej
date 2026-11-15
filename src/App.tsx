@@ -2,6 +2,7 @@ import { useState } from "react";
 import { STAGES } from "../shared/protocol";
 import { useRoom } from "./useRoom";
 import { Quiz } from "./stages/Quiz";
+import { Film } from "./stages/Film";
 
 export default function App() {
   const [session, setSession] = useState<{ code: string; name: string } | null>(() => {
@@ -140,8 +141,7 @@ function Room({ code, name }: { code: string; name: string }) {
 
   const stage = STAGES.find((s) => s.id === state.stage);
   const round = state.round;
-  const canGoNext =
-    round?.kind === "placeholder" || (round?.kind === "quiz" && round.step === "summary");
+  const canGoNext = round?.kind === "placeholder" || (round != null && round.step === "summary");
   const isLast = state.stage >= STAGES.length;
 
   return (
@@ -156,6 +156,9 @@ function Room({ code, name }: { code: string; name: string }) {
 
       {round?.kind === "quiz" && (
         <Quiz view={round} players={state.players} you={you} send={send} serverNow={serverNow} />
+      )}
+      {round?.kind === "film" && (
+        <Film view={round} players={state.players} you={you} send={send} serverNow={serverNow} />
       )}
       {round?.kind === "placeholder" && <p className="muted">Ten etap jest jeszcze w budowie 🚧</p>}
 
