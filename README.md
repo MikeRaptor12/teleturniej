@@ -35,13 +35,27 @@ npm install
 npm run dev
 ```
 
-Otwórz adres z terminala w dwóch kartach, żeby zasymulować dwóch graczy.
+Lokalne hasło do strony ustaw w pliku `.dev.vars` (nie trafia do repo):
+
+```
+ACCESS_PASSWORD="jakies-haslo"
+```
+
+Żeby zasymulować dwóch graczy, otwórz grę w zwykłym oknie i w oknie incognito.
+
+## Zabezpieczenia
+
+- **Hasło do strony** – sekret `ACCESS_PASSWORD` w Cloudflare. Bez niego strona jest zamknięta. Po 5 błędnych próbach z jednego IP blokada na 15 minut.
+- **Tylko założone pokoje** – zgadnięty kod nic nie daje, pokoje powstają wyłącznie przyciskiem „Załóż nowy pokój”.
+- **Poczekalnia** – każdy poza zakładającym czeka, aż host go wpuści. Odrzuceni i wyrzuceni nie mogą wrócić.
 
 ## Wdrożenie
 
 Automatycznie: w panelu Cloudflare **Workers & Pages → Create → Import a repository** wskaż to repo. Każdy push do `main` się wdroży.
 
 Ręcznie: `npm run deploy`.
+
+Hasło: w panelu Cloudflare worker → **Settings → Variables and Secrets → Add** → typ **Secret**, nazwa `ACCESS_PASSWORD`. Albo `npx wrangler secret put ACCESS_PASSWORD`.
 
 ## Status
 

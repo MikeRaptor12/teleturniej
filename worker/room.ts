@@ -28,17 +28,33 @@ interface StoredPlayer {
 
 type RoundState = QuizState | FilmState | { kind: "placeholder" };
 
+interface PendingPlayer {
+  id: string;
+  name: string;
+}
+
+/** Ile osób może naraz czekać na wpuszczenie. */
+const MAX_PENDING = 10;
+
 interface Stored {
+  /** pokój założony przez POST /api/rooms – tylko do takich da się wejść */
+  created: boolean;
   code: string;
   phase: RoomState["phase"];
   stage: number;
   hostId: string | null;
   players: StoredPlayer[];
   round: RoundState | null;
+  /** czekający na decyzję hosta */
+  pending: PendingPlayer[];
+  /** odrzuceni i wyrzuceni – nie mogą nawet prosić o wejście */
+  banned: string[];
 }
 
 interface Attachment {
   playerId: string | null;
+  /** id gracza czekającego w poczekalni */
+  pendingId?: string;
 }
 
 /**
@@ -53,8 +69,18 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.data) {
       const stored = await this.ctx.storage.get<Stored>("room");
       this.data = stored
-        ? { ...stored, round: stored.round ?? null }
-        : { code, phase: "lobby", stage: 0, hostId: null, players: [], round: null };
+        ? { ...stored, round: stored.round ?? null, pending: stored.pending ?? [], banned: stored.banned ?? [] }
+        : {
+            created: false,
+            code,
+            phase: "lobby",
+            stage: 0,
+            hostId: null,
+            players: [],
+            round: null,
+            pending: [],
+            banned: [],
+          };
     }
     if (!this.data.code && code) this.data.code = code;
     return this.data;
@@ -64,11 +90,27 @@ export class GameRoom extends DurableObject<Env> {
     if (this.data) await this.ctx.storage.put("room", this.data);
   }
 
+  /** RPC z workera: zakłada pokój. false = kod już zajęty. */
+  async create(code: string): Promise<boolean> {
+    const room = await this.load(code);
+    if (room.created) return false;
+    room.created = true;
+    room.code = code;
+    await this.save();
+    return true;
+  }
+
   async fetch(request: Request): Promise<Response> {
     const code = new URL(request.url).pathname.split("/")[3];
-    await this.load(code);
+    const room = await this.load(code);
 
     const { 0: client, 1: server } = new WebSocketPair();
+    if (!room.created) {
+      // zgadnięty / nieistniejący kod – nie tworzymy pokoju w locie
+      server.accept();
+      server.close(4004, "Nie ma takiego pokoju");
+      return new Response(null, { status: 101, webSocket: client });
+    }
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ playerId: null } satisfies Attachment);
     return new Response(null, { status: 101, webSocket: client });
@@ -94,6 +136,9 @@ export class GameRoom extends DurableObject<Env> {
         if (!name || !playerId) {
           return this.send(ws, { type: "error", message: "Podaj nick" });
         }
+        if (room.banned.includes(playerId)) {
+          return ws.close(4003, "Host nie wpuścił cię do pokoju");
+        }
         let player = room.players.find((p) => p.id === playerId);
         if (!player) {
           if (room.phase !== "lobby") {
@@ -102,12 +147,25 @@ export class GameRoom extends DurableObject<Env> {
           if (room.players.length >= MAX_PLAYERS) {
             return this.send(ws, { type: "error", message: "Pokój jest pełny" });
           }
+          if (room.hostId !== null) {
+            // każdy poza zakładającym czeka, aż host go wpuści
+            const waiting = room.pending.find((p) => p.id === playerId);
+            if (waiting) waiting.name = name;
+            else if (room.pending.length >= MAX_PENDING) {
+              return this.send(ws, { type: "error", message: "Za dużo osób czeka na wejście, spróbuj później" });
+            } else room.pending.push({ id: playerId, name });
+            ws.serializeAttachment({ playerId: null, pendingId: playerId } satisfies Attachment);
+            await this.save();
+            this.send(ws, { type: "pending" });
+            return this.broadcast();
+          }
+          // pierwsza osoba w świeżo założonym pokoju zostaje hostem
           player = { id: playerId, name, score: 0, joinedAt: now };
           room.players.push(player);
+          room.hostId = playerId;
         } else {
           player.name = name; // powrót po rozłączeniu
         }
-        room.hostId ??= playerId;
         ws.serializeAttachment({ playerId } satisfies Attachment);
         await this.save();
         this.send(ws, { type: "welcome", you: playerId, state: this.publicState() });
@@ -122,6 +180,11 @@ export class GameRoom extends DurableObject<Env> {
         }
         for (const p of room.players) p.score = 0;
         room.phase = "playing";
+        // poczekalnia się zamyka – w trakcie gry nikt nie dołącza
+        for (const s of this.ctx.getWebSockets()) {
+          if ((s.deserializeAttachment() as Attachment).pendingId) s.close(4003, "Gra już się zaczęła");
+        }
+        room.pending = [];
         this.startStage(1, now);
         await this.persistAndSchedule();
         return this.broadcast();
@@ -174,9 +237,37 @@ export class GameRoom extends DurableObject<Env> {
         return this.broadcast();
       }
 
+      case "admit": {
+        if (!isHost) return;
+        const waiting = room.pending.find((p) => p.id === msg.playerId);
+        if (!waiting) return;
+        room.pending = room.pending.filter((p) => p.id !== waiting.id);
+        const sockets = this.ctx
+          .getWebSockets()
+          .filter((s) => (s.deserializeAttachment() as Attachment).pendingId === waiting.id);
+
+        const full = room.players.length >= MAX_PLAYERS;
+        if (!msg.accept || room.phase !== "lobby" || full) {
+          if (!msg.accept) room.banned.push(waiting.id);
+          await this.save();
+          const reason = msg.accept ? (full ? "Pokój jest pełny" : "Gra już trwa") : "Host nie wpuścił cię do pokoju";
+          for (const s of sockets) s.close(4003, reason);
+          return this.broadcast();
+        }
+
+        room.players.push({ id: waiting.id, name: waiting.name, score: 0, joinedAt: now });
+        await this.save();
+        for (const s of sockets) {
+          s.serializeAttachment({ playerId: waiting.id } satisfies Attachment);
+          this.send(s, { type: "welcome", you: waiting.id, state: this.publicState() });
+        }
+        return this.broadcast();
+      }
+
       case "kick": {
         if (!isHost || msg.playerId === room.hostId) return;
         room.players = room.players.filter((p) => p.id !== msg.playerId);
+        if (!room.banned.includes(msg.playerId)) room.banned.push(msg.playerId);
         for (const s of this.ctx.getWebSockets()) {
           const a = s.deserializeAttachment() as Attachment;
           if (a.playerId === msg.playerId) s.close(4001, "Wyrzucony z pokoju");
@@ -207,7 +298,12 @@ export class GameRoom extends DurableObject<Env> {
 
   async webSocketClose(ws: WebSocket) {
     const room = await this.load();
-    const { playerId } = ws.deserializeAttachment() as Attachment;
+    const { playerId, pendingId } = ws.deserializeAttachment() as Attachment;
+    // ktoś z poczekalni zamknął kartę -> znika z listy
+    if (pendingId && !this.ctx.getWebSockets().some((s) => s !== ws && (s.deserializeAttachment() as Attachment).pendingId === pendingId)) {
+      room.pending = room.pending.filter((p) => p.id !== pendingId);
+      await this.save();
+    }
     // Host wyszedł -> przekaż rolę następnemu połączonemu graczowi
     if (playerId && playerId === room.hostId && !this.isConnected(playerId, ws)) {
       const next = room.players.find((p) => p.id !== playerId && this.isConnected(p.id, ws));
@@ -297,6 +393,7 @@ export class GameRoom extends DurableObject<Env> {
       phase: room.phase,
       stage: room.stage,
       players,
+      pending: room.pending.map((p) => ({ id: p.id, name: p.name })),
       round: this.roundView(),
       serverNow: Date.now(),
     };
@@ -314,7 +411,8 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.data) return;
     const msg: ServerMessage = { type: "state", state: this.publicState(except) };
     for (const s of this.ctx.getWebSockets()) {
-      if (s !== except) this.send(s, msg);
+      // stan pokoju widzą tylko wpuszczeni gracze – nie poczekalnia ani niedołączeni
+      if (s !== except && (s.deserializeAttachment() as Attachment).playerId) this.send(s, msg);
     }
   }
 }

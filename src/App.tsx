@@ -1,10 +1,75 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { STAGES } from "../shared/protocol";
 import { useRoom } from "./useRoom";
 import { Quiz } from "./stages/Quiz";
 import { Film } from "./stages/Film";
 
+type Auth = "checking" | "ok" | "login" | "unconfigured";
+
 export default function App() {
+  const [auth, setAuth] = useState<Auth>("checking");
+
+  useEffect(() => {
+    fetch("/api/session")
+      .then((r) => r.json() as Promise<{ ok: boolean; configured: boolean }>)
+      .then((r) => setAuth(r.ok ? "ok" : r.configured ? "login" : "unconfigured"))
+      .catch(() => setAuth("login"));
+  }, []);
+
+  if (auth === "checking") return <main className="card center">Ładowanie…</main>;
+  if (auth === "unconfigured") {
+    return (
+      <main className="card center">
+        <h1>🔒 Teleturniej</h1>
+        <p>Strona jest zamknięta: właściciel nie ustawił jeszcze hasła.</p>
+        <p className="muted">
+          W panelu Cloudflare: worker → Settings → Variables and Secrets → dodaj sekret <code>ACCESS_PASSWORD</code>.
+        </p>
+      </main>
+    );
+  }
+  if (auth === "login") return <Login onOk={() => setAuth("ok")} />;
+  return <Game />;
+}
+
+function Login({ onOk }: { onOk: () => void }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) return onOk();
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(body.error ?? "Nie udało się zalogować");
+      setPassword("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="card center" onSubmit={submit}>
+      <h1>🔒 Teleturniej</h1>
+      <label>
+        Hasło do gry
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
+      </label>
+      {error && <p className="warn">{error}</p>}
+      <button disabled={!password || busy}>Wejdź</button>
+    </form>
+  );
+}
+
+function Game() {
   const [session, setSession] = useState<{ code: string; name: string } | null>(() => {
     const code = new URLSearchParams(location.search).get("room");
     const name = sessionStorage.getItem("name");
@@ -34,6 +99,7 @@ function Home({ onEnter }: { onEnter: (code: string, name: string) => void }) {
     setBusy(true);
     try {
       const res = await fetch("/api/rooms", { method: "POST" });
+      if (res.status === 401) return location.reload(); // sesja wygasła -> ekran hasła
       const { code } = (await res.json()) as { code: string };
       onEnter(code, name.trim());
     } finally {
@@ -71,7 +137,33 @@ function Home({ onEnter }: { onEnter: (code: string, name: string) => void }) {
 }
 
 function Room({ code, name }: { code: string; name: string }) {
-  const { state, you, error, connected, send, serverNow } = useRoom(code, name);
+  const { state, you, error, connected, pending, closedReason, send, serverNow } = useRoom(code, name);
+
+  if (closedReason) {
+    return (
+      <main className="card center">
+        <h1>🚪 {closedReason}</h1>
+        <button
+          onClick={() => {
+            history.replaceState(null, "", "/");
+            location.reload();
+          }}
+        >
+          Wróć na start
+        </button>
+      </main>
+    );
+  }
+
+  if (pending) {
+    return (
+      <main className="card center">
+        <h1>⏳ Poczekalnia</h1>
+        <p>Pokój {code}: czekasz, aż host cię wpuści…</p>
+        <p className="muted">Nie zamykaj tej karty.</p>
+      </main>
+    );
+  }
 
   if (!state) {
     return <main className="card center">{error ?? "Łączenie z pokojem…"}</main>;
@@ -106,6 +198,29 @@ function Room({ code, name }: { code: string; name: string }) {
             </li>
           ))}
         </ul>
+        {state.pending.length > 0 && (
+          <>
+            <h2>Czekają na wejście ({state.pending.length})</h2>
+            <ul className="players pending">
+              {state.pending.map((p) => (
+                <li key={p.id}>
+                  {p.name}
+                  {me?.isHost && (
+                    <span className="admit">
+                      <button onClick={() => send({ type: "admit", playerId: p.id, accept: true })}>Wpuść</button>
+                      <button
+                        className="secondary"
+                        onClick={() => send({ type: "admit", playerId: p.id, accept: false })}
+                      >
+                        Odrzuć
+                      </button>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <h2>Etapy</h2>
         <ol>
           {STAGES.map((s) => (

@@ -124,3 +124,10 @@ button.link { background: none; color: var(--danger); padding: 0 0 0 12px; font-
 .guess input { font-size: 1.15rem; padding: 14px; }
 .guess button { padding: 14px 22px; }
 .big-ok { font-size: 1.3rem; color: #7dffb0; }
+
+/* --- poczekalnia --- */
+.players.pending { grid-template-columns: 1fr; }
+.players.pending li { display: flex; justify-content: space-between; align-items: center; border: 1px dashed #343a78; }
+.admit { display: flex; gap: 8px; }
+.admit button { padding: 6px 14px; }
+code { background: #0f1230; padding: 2px 6px; border-radius: 4px; }

@@ -20,6 +20,10 @@ export function useRoom(code: string | null, name: string) {
   const [you, setYou] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
+  /** czekamy w poczekalni na decyzję hosta */
+  const [pending, setPending] = useState(false);
+  /** pokój zamknął połączenie na stałe (odrzucenie, wyrzucenie, brak pokoju) */
+  const [closedReason, setClosedReason] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   /** różnica: zegar serwera − zegar lokalny (ms) */
   const offsetRef = useRef(0);
@@ -45,7 +49,10 @@ export function useRoom(code: string | null, name: string) {
         if (msg.type === "welcome" || msg.type === "state") {
           offsetRef.current = msg.state.serverNow - Date.now();
         }
-        if (msg.type === "welcome") {
+        if (msg.type === "pending") {
+          setPending(true);
+        } else if (msg.type === "welcome") {
+          setPending(false);
           setYou(msg.you);
           setState(msg.state);
           setError(null);
@@ -58,8 +65,10 @@ export function useRoom(code: string | null, name: string) {
       ws.onclose = (e) => {
         setConnected(false);
         if (closed) return;
-        if (e.code === 4001) {
-          setError(e.reason || "Rozłączono");
+        // 4001 wyrzucony, 4003 nie wpuszczony, 4004 brak pokoju, 4401 brak hasła
+        if (e.code === 4001 || e.code === 4003 || e.code === 4004 || e.code === 4401) {
+          setClosedReason(e.reason || "Rozłączono");
+          setPending(false);
           return;
         }
         timer = setTimeout(connect, Math.min(1000 * 2 ** retry++, 8000));
@@ -80,7 +89,7 @@ export function useRoom(code: string | null, name: string) {
 
   const serverNow = useCallback(() => Date.now() + offsetRef.current, []);
 
-  return { state, you, error, connected, send, serverNow };
+  return { state, you, error, connected, pending, closedReason, send, serverNow };
 }
 
 /** Przerysowuje komponent co `ms`, np. dla odliczania czasu. */

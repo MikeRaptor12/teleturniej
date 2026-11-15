@@ -69,6 +69,8 @@ export interface RoomState {
   /** 1–5, 0 w lobby */
   stage: number;
   players: PublicPlayer[];
+  /** osoby czekające, aż host je wpuści */
+  pending: { id: string; name: string }[];
   round: RoundView | null;
   /** czas serwera w chwili wysłania – do synchronizacji zegara */
   serverNow: number;
@@ -79,6 +81,8 @@ export type ClientMessage =
   | { type: "join"; playerId: string; name: string }
   | { type: "start" }
   | { type: "kick"; playerId: string }
+  /** host: wpuść / odrzuć osobę z poczekalni */
+  | { type: "admit"; playerId: string; accept: boolean }
   | { type: "answer"; choice: number }
   /** etap 2: próba odgadnięcia tytułu */
   | { type: "guess"; text: string }
@@ -89,6 +93,8 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: "welcome"; you: string; state: RoomState }
   | { type: "state"; state: RoomState }
+  /** czekasz w poczekalni na decyzję hosta */
+  | { type: "pending" }
   | { type: "error"; message: string };
 
 export const STAGES = [
