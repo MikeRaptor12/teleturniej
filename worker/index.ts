@@ -30,7 +30,12 @@ function randomCode(len = 4): string {
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json", "cache-control": "no-store", ...headers },
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      ...headers,
+    },
   });
 
 /** WebSocket, który od razu się zamyka z powodem – klient wie, żeby nie łączyć się ponownie. */

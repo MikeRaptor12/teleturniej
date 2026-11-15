@@ -1,0 +1,9 @@
+# Nagłówki bezpieczeństwa dla wszystkich plików strony (Cloudflare Workers Static Assets).
+# CSP: skrypty, style i połączenia tylko z naszej domeny – nawet gdyby ktoś przemycił kod, przeglądarka go nie uruchomi.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Cross-Origin-Opener-Policy: same-origin

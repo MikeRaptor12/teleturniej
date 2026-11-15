@@ -4,7 +4,7 @@ import type { ClientMessage, RoomState, ServerMessage } from "../shared/protocol
 function getPlayerId(): string {
   try {
     let id = localStorage.getItem("playerId");
-    if (!id) {
+    if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
       id = crypto.randomUUID();
       localStorage.setItem("playerId", id);
     }

@@ -13,6 +13,8 @@ Gra w stylu teleturnieju dla znajomych, tylko na komputer (desktop), online. Ję
 - Każdy etap to czysta logika w `worker/stages/<etap>.ts` (start / akcja gracza / advance / view) + komponent w `src/stages/`.
 - Treści pytań w `worker/content/` – tylko fakty i własne sformułowania. Żadnych kadrów, plakatów, cytatów z filmów, muzyki ani innych materiałów chronionych prawem autorskim; grafiki tylko z wolnych licencji.
 
+- Bezpieczeństwo: hasło do strony (sekret `ACCESS_PASSWORD`), poczekalnia z akceptacją hosta, pokoje tylko przez `POST /api/rooms`. Każde pole z komunikatu klienta walidować w `worker/room.ts`; nigdy `dangerouslySetInnerHTML`. Nagłówki (CSP) w `public/_headers` – nowe zewnętrzne źródła (np. kafelki OSM w etapie 4) trzeba tam dopisać.
+
 ## Plan etapów
 1. Szybki strzał – ABCD, bonus za szybkość ✅
 2. Zgadnij film – stopniowo odsłaniane podpowiedzi (emoji, fakty, fabuła „na opak”), wpisywanie tytułu z tolerancją literówek, mniej punktów za późniejsze trafienie ✅

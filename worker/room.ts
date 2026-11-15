@@ -28,6 +28,19 @@ interface StoredPlayer {
 
 type RoundState = QuizState | FilmState | { kind: "placeholder" };
 
+/** Maksymalny rozmiar komunikatu od gracza – nic w grze nie potrzebuje więcej. */
+const MAX_MESSAGE_BYTES = 2048;
+/** Identyfikator gracza to UUID z przeglądarki – nic innego nie przyjmujemy. */
+const PLAYER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Nick: bez znaków sterujących i niewidzialnych, max 20 znaków. */
+function cleanName(raw: unknown): string {
+  return String(raw ?? "")
+    .replace(/[\p{C}]/gu, "")
+    .trim()
+    .slice(0, 20);
+}
+
 interface PendingPlayer {
   id: string;
   name: string;
@@ -120,7 +133,10 @@ export class GameRoom extends DurableObject<Env> {
     const room = await this.load();
     let msg: ClientMessage;
     try {
-      msg = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw));
+      const text = typeof raw === "string" ? raw : new TextDecoder().decode(raw);
+      if (text.length > MAX_MESSAGE_BYTES) throw new Error("za duży");
+      msg = JSON.parse(text);
+      if (typeof msg !== "object" || msg === null || typeof msg.type !== "string") throw new Error("zły kształt");
     } catch {
       return this.send(ws, { type: "error", message: "Niepoprawny komunikat" });
     }
@@ -131,9 +147,12 @@ export class GameRoom extends DurableObject<Env> {
 
     switch (msg.type) {
       case "join": {
-        const name = String(msg.name ?? "").trim().slice(0, 20);
-        const playerId = String(msg.playerId ?? "").slice(0, 64);
-        if (!name || !playerId) {
+        const name = cleanName(msg.name);
+        const playerId = String(msg.playerId ?? "");
+        if (!PLAYER_ID.test(playerId)) {
+          return this.send(ws, { type: "error", message: "Niepoprawny identyfikator gracza" });
+        }
+        if (!name) {
           return this.send(ws, { type: "error", message: "Podaj nick" });
         }
         if (room.banned.includes(playerId)) {
