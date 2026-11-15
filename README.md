@@ -46,7 +46,8 @@ Ręcznie: `npm run deploy`.
 ## Status
 
 - [x] Lobby: tworzenie pokoju, dołączanie po kodzie lub linku, host, powrót po rozłączeniu
-- [ ] Etap 1 – Szybki strzał
+- [x] Przejścia między etapami, ekran końcowy, „zagraj jeszcze raz”
+- [x] Etap 1 – Szybki strzał (pytania w `worker/content/quiz.ts`)
 - [ ] Etap 2 – Zgadnij film
 - [ ] Etap 3 – Kłamczuch
 - [ ] Etap 4 – Gdzie to jest? / Bliżej = lepiej

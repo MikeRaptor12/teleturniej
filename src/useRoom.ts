@@ -21,6 +21,8 @@ export function useRoom(code: string | null, name: string) {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  /** różnica: zegar serwera − zegar lokalny (ms) */
+  const offsetRef = useRef(0);
 
   useEffect(() => {
     if (!code) return;
@@ -40,6 +42,9 @@ export function useRoom(code: string | null, name: string) {
       };
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data) as ServerMessage;
+        if (msg.type === "welcome" || msg.type === "state") {
+          offsetRef.current = msg.state.serverNow - Date.now();
+        }
         if (msg.type === "welcome") {
           setYou(msg.you);
           setState(msg.state);
@@ -73,5 +78,16 @@ export function useRoom(code: string | null, name: string) {
     wsRef.current?.send(JSON.stringify(msg));
   }, []);
 
-  return { state, you, error, connected, send };
+  const serverNow = useCallback(() => Date.now() + offsetRef.current, []);
+
+  return { state, you, error, connected, send, serverNow };
+}
+
+/** Przerysowuje komponent co `ms`, np. dla odliczania czasu. */
+export function useTick(ms = 100) {
+  const [, setT] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setT((t) => t + 1), ms);
+    return () => clearInterval(id);
+  }, [ms]);
 }

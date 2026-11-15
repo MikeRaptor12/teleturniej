@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { STAGES } from "../shared/protocol";
 import { useRoom } from "./useRoom";
+import { Quiz } from "./stages/Quiz";
 
 export default function App() {
   const [session, setSession] = useState<{ code: string; name: string } | null>(() => {
@@ -69,7 +70,7 @@ function Home({ onEnter }: { onEnter: (code: string, name: string) => void }) {
 }
 
 function Room({ code, name }: { code: string; name: string }) {
-  const { state, you, error, connected, send } = useRoom(code, name);
+  const { state, you, error, connected, send, serverNow } = useRoom(code, name);
 
   if (!state) {
     return <main className="card center">{error ?? "Łączenie z pokojem…"}</main>;
@@ -121,14 +122,53 @@ function Room({ code, name }: { code: string; name: string }) {
     );
   }
 
+  if (state.phase === "finished") {
+    const podium = [...state.players].sort((a, b) => b.score - a.score);
+    return (
+      <main className="card">
+        <h1>🏆 Koniec gry!</h1>
+        <p className="big center-text">Wygrywa {podium[0]?.name}!</p>
+        <Scoreboard players={state.players} you={you} />
+        {me?.isHost && (
+          <button className="spaced" onClick={() => send({ type: "next" })}>
+            Zagraj jeszcze raz
+          </button>
+        )}
+      </main>
+    );
+  }
+
   const stage = STAGES.find((s) => s.id === state.stage);
+  const round = state.round;
+  const canGoNext =
+    round?.kind === "placeholder" || (round?.kind === "quiz" && round.step === "summary");
+  const isLast = state.stage >= STAGES.length;
+
   return (
-    <main className="card">
-      <h1>
-        Etap {state.stage}: {stage?.name}
-      </h1>
-      <p>Tu pojawi się rozgrywka tego etapu.</p>
+    <main className="card wide">
+      <header className="row between">
+        <h1>
+          Etap {state.stage}: {stage?.name}
+        </h1>
+        <span className="muted">Pokój {state.code}</span>
+      </header>
+      {!connected && <p className="warn">Ponowne łączenie…</p>}
+
+      {round?.kind === "quiz" && (
+        <Quiz view={round} players={state.players} you={you} send={send} serverNow={serverNow} />
+      )}
+      {round?.kind === "placeholder" && <p className="muted">Ten etap jest jeszcze w budowie 🚧</p>}
+
       <Scoreboard players={state.players} you={you} />
+
+      {canGoNext &&
+        (me?.isHost ? (
+          <button className="spaced" onClick={() => send({ type: "next" })}>
+            {isLast ? "Zakończ grę" : `Dalej: etap ${state.stage + 1}`}
+          </button>
+        ) : (
+          <p className="muted">Czekamy na hosta…</p>
+        ))}
     </main>
   );
 }

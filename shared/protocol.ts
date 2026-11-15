@@ -2,7 +2,7 @@
 
 export const MAX_PLAYERS = 10;
 
-export type Phase = "lobby" | "stage" | "final" | "finished";
+export type Phase = "lobby" | "playing" | "finished";
 
 export interface PublicPlayer {
   id: string;
@@ -12,19 +12,52 @@ export interface PublicPlayer {
   isHost: boolean;
 }
 
+/** Widok etapu 1 – Szybki strzał (ABCD). */
+export interface QuizView {
+  kind: "quiz";
+  step: "intro" | "question" | "reveal" | "summary";
+  /** numer pytania od 0 */
+  index: number;
+  total: number;
+  /** czas serwera (ms), kiedy kończy się bieżący krok */
+  endsAt: number | null;
+  durationMs: number | null;
+  question: string | null;
+  options: string[] | null;
+  /** id graczy, którzy już odpowiedzieli (bez zdradzania odpowiedzi) */
+  answered: string[];
+  /** poprawna odpowiedź – tylko w kroku "reveal" */
+  correct: number | null;
+  /** wyniki pytania – tylko w kroku "reveal" */
+  results: Record<string, { choice: number | null; points: number }> | null;
+}
+
+/** Etap jeszcze niezaimplementowany. */
+export interface PlaceholderView {
+  kind: "placeholder";
+}
+
+export type RoundView = QuizView | PlaceholderView;
+
 export interface RoomState {
   code: string;
   phase: Phase;
   /** 1–5, 0 w lobby */
   stage: number;
   players: PublicPlayer[];
+  round: RoundView | null;
+  /** czas serwera w chwili wysłania – do synchronizacji zegara */
+  serverNow: number;
 }
 
 // Klient -> serwer
 export type ClientMessage =
   | { type: "join"; playerId: string; name: string }
   | { type: "start" }
-  | { type: "kick"; playerId: string };
+  | { type: "kick"; playerId: string }
+  | { type: "answer"; choice: number }
+  /** host: przejście dalej (po podsumowaniu etapu / na końcu gry) */
+  | { type: "next" };
 
 // Serwer -> klient
 export type ServerMessage =
